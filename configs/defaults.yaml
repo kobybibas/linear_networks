@@ -1,0 +1,22 @@
+#Flow
+fast_dev_run: false
+experimnet_name: ''
+seed: 1234
+check_val_every_n_epoch: 5000
+
+
+# Net architecture
+intermediate_sizes: [ ]
+ptretrained_path: ../train_erm_model_20210319_183441/model.ckpt
+
+defaults:
+  - data: poly_data.yaml  # Path to sub-config, can also omit the .yaml extension
+  - optim: adam.yaml
+
+hydra:
+  sweep:
+    dir: ../output/multirun_${experimnet_name}_${now:%Y%m%d_%H%M%S}
+    subdir: ${hydra.job.override_dirname}
+  run:
+    # Output directory for normal runs
+    dir: ../output/${experimnet_name}_${now:%Y%m%d_%H%M%S}
