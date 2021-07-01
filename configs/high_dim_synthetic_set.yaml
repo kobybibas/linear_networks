@@ -1,0 +1,21 @@
+effective_rank: 5  # real rank of the data
+n_features: 100  # number of features
+n_samples: 1000
+n_trains: "np.linspace(10,300,20)"
+seed: 1234
+
+intermediate_layer_ratio: [ 1, 1, 1 ]
+print_interval: 5000
+
+# Training params
+lr: 1e-3
+epochs: 15000
+milestones: [ 14900 ]
+
+hydra:
+  sweep:
+    dir: ../output/multirun_low_rank_regression_${now:%Y%m%d_%H%M%S}
+    subdir: ${hydra.job.override_dirname}
+  run:
+    # Output directory for normal runs
+    dir: ../output/low_rank_regression_${now:%Y%m%d_%H%M%S}

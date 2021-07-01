@@ -13,8 +13,8 @@ from lighting_utils import LitLinearNet
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(config_name="linear_network", config_path='../configs')
-def execute_linear_network(cfg):
+@hydra.main(config_name="low_dim_synthetic_set", config_path='../configs')
+def execute_low_dim_synthetic_set(cfg):
     logger.info(cfg.pretty())
 
     # Trainset
@@ -39,7 +39,6 @@ def execute_linear_network(cfg):
     trainer.save_checkpoint("model.ckpt")
 
     # pNML
-    is_first = True
     y_vec = np.linspace(cfg.y_min, cfg.y_max, cfg.y_num)
     for i, x_test_i in enumerate(x_test):
         # predict erm
@@ -62,4 +61,4 @@ def execute_linear_network(cfg):
 
 
 if __name__ == '__main__':
-    execute_linear_network()
+    execute_low_dim_synthetic_set()

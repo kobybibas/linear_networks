@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 import torch
 
-from architecture_utils import LinearNet
+from model_utils import LinearNet
 
 logger = logging.getLogger(__name__)
 

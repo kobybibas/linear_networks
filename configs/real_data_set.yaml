@@ -1,0 +1,29 @@
+data_dir: '../data'
+set_name: '' #
+num_splits: 200  # 1000
+val_train_ratio: 0.125 # equivalent to ratio of 80% 10% 10% train-val-test
+max_set_size: 2000
+max_test_set_size: 1000
+m_over_n_cfg:
+  num_m_over_n: 20
+  min_m_over_n: 0.05
+  max_m_over_n: 2
+  min_n_in_m_over_n: 3
+  is_add_m_equal_n: true
+
+# Training params
+net_params:
+  lr: 1e-2
+  epochs: 1000
+  milestones: [ 600, 800 ]
+  intermediate_layer_ratio: [ 1,1,1 ]
+  is_debug: false
+  print_interval: 500
+
+hydra:
+  run:
+    # Output directory
+    dir: ../output/real_datal_${now:%Y%m%d_%H%M%S}
+  sweep:
+    dir: ../output/multirun_real_data_${now:%Y%m%d_%H%m%S}
+    subdir: .

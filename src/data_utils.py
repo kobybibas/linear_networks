@@ -1,37 +1,41 @@
 import logging
+import os
+import os.path as osp
 
 import numpy as np
 import numpy.linalg as npl
 import torch
-from sklearn.linear_model import LinearRegression
+import torch.linalg as tln
+from pmlb import fetch_data
+from sklearn.datasets import make_low_rank_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
 
 logger = logging.getLogger(__name__)
 
+pmlb_set_names_all = ['1028_SWD', '1201_BNG_breastTumor', '192_vineyard', '201_pol',
+                      '210_cloud', '215_2dplanes', '1029_LEV', '218_house_8L', '225_puma8NH',
+                      '228_elusage', '229_pwLinear', '230_machine_cpu',
+                      '294_satellite_image', '344_mv', '4544_GeographicalOriginalofMusic',
+                      '1030_ERA', '519_vinnie', '522_pm10', '523_analcatdata_neavote',
+                      '527_analcatdata_election2000', '529_pollen', '537_houses',
+                      '542_pollution', '1096_FacultySalaries', '1191_BNG_pbc',
+                      '1193_BNG_lowbwt', '1196_BNG_pharynx', '1199_BNG_echoMonths']
 
-def fit_least_squares_estimator(x_arr: np.ndarray, y_vec: np.ndarray, lamb: float = 0.0) -> np.ndarray:
-    """
-    Fit least squares estimator
-    :param x_arr: The training set features matrix. Each row represents an example.
-    :param y_vec: the labels vector.
-    :param lamb: regularization term.
-    :return: the fitted parameters. A column vector
-    """
-    n, m = x_arr.shape
-    phi_t_phi_plus_lamb = x_arr.T @ x_arr + lamb * np.eye(m)
+pmlb_set_names = ["1028_SWD", "1030_ERA", "1196_BNG_pharynx",
+                  "1199_BNG_echoMonths", "1201_BNG_breastTumor", "215_2dplanes",
+                  "218_house_8L", "225_puma8NH", "229_pwLinear",
+                  "344_mv", "522_pm10", "537_houses", "542_pollution"]
 
-    # If invertible, regular least squares
-    if npl.cond(phi_t_phi_plus_lamb) < 1 / np.finfo('float').eps:
-        inv = npl.inv(phi_t_phi_plus_lamb)
-        theta = inv @ x_arr.T @ y_vec
-    else:  # minimum norm
-        # inv = npl.pinv(x_arr @ x_arr.T)
-        # theta = x_arr.T @ inv @ y_vec
-        reg = LinearRegression(fit_intercept=False).fit(x_arr, y_vec)  # using scipy is more stable
-        theta = reg.coef_
 
-    theta = np.expand_dims(theta, 1)
-    return theta
+def calc_effective_rank(s):
+    s_norm = tln.norm(s, ord=1)
+    p = s / s_norm
+    effective_rank = torch.exp(
+        torch.sum(torch.tensor([-p_i * torch.log(p_i) for p_i in p if p_i > 0]))
+    )
+    return effective_rank
 
 
 def add_test_to_train(x_train, y_train, x_test, y_test, model_degree, insert_loc: int = 0):
@@ -110,3 +114,75 @@ class PolynomialDataset(Dataset):
             phi_train.append(np.squeeze(phi_train_i.T))
         phi_train = np.asarray(phi_train)
         return phi_train.astype(np.float32)
+
+
+def get_pmlb_data(dataset_name, data_dir: str) -> (np.ndarray, np.ndarray):
+    pmlb_data_dir = osp.join(data_dir, 'pmlb_datasets')
+    os.makedirs(pmlb_data_dir, exist_ok=True)
+    x_arr, y_vec = fetch_data(dataset_name, return_X_y=True, local_cache_dir=pmlb_data_dir)
+    return x_arr, y_vec
+
+
+def split_set_with_preprocess(x_all, y_all, train_set_size: int, val_set_size: int, test_set_size: int):
+    x_train, x_test, y_train, y_test = train_test_split(x_all, y_all,
+                                                        test_size=test_set_size + val_set_size,
+                                                        train_size=train_set_size)
+    x_val, x_test, y_val, y_test = train_test_split(x_test, y_test, test_size=test_set_size)
+    x_train, x_val, x_test = convert_to_row(x_train), convert_to_row(x_val), convert_to_row(x_test)
+
+    # Preprocess
+    x_train, x_val, x_test = standardize_features(x_train, x_val, x_test)
+    y_train, y_val, y_test = standardize_features(y_train, y_val, y_test)
+    y_train, y_val, y_test = y_train.squeeze(), y_val.squeeze(), y_test.squeeze()
+    x_train, x_val, x_test = add_bias_term(x_train), add_bias_term(x_val), add_bias_term(x_test)
+    return x_train, y_train, x_val, y_val, x_test, y_test
+
+
+def convert_to_row(x):
+    if len(x.shape) == 1:
+        x = x[np.newaxis, :]
+    return x
+
+
+def convert_to_column(x):
+    if len(x.shape) == 1:
+        x = x[:, np.newaxis]
+    return x
+
+
+def add_bias_term(x_arr):
+    x_arr_with_bias = np.hstack((x_arr, np.ones((x_arr.shape[0], 1))))
+    return x_arr_with_bias
+
+
+def normalize_set(x_arr):
+    x_arr_norm = x_arr / npl.norm(x_arr, axis=1, keepdims=True)
+    return x_arr_norm
+
+
+def standardize_features(x_train: np.ndarray, x_val: np.ndarray, x_test: np.ndarray) -> (
+        np.ndarray, np.ndarray, np.ndarray):
+    x_train, x_val, x_test = convert_to_column(x_train), convert_to_column(x_val), convert_to_column(x_test)
+
+    # Learn training statistics
+    scaler_h = StandardScaler().fit(x_train)
+
+    # Apply on sets
+    x_train_stand = scaler_h.transform(x_train)
+    x_val_stand = scaler_h.transform(x_val)
+    x_test_stand = scaler_h.transform(x_test)
+    return x_train_stand, x_val_stand, x_test_stand
+
+
+def create_synthetic_dataset(n_samples, n_features, effective_rank, seed):
+    vecs = make_low_rank_matrix(n_samples=n_samples, n_features=n_features, effective_rank=effective_rank,
+                                tail_strength=0.01, random_state=seed)
+    x_arr = torch.from_numpy(vecs)
+    x_arr = torch.cat((x_arr, torch.ones(n_samples, 1)), dim=1)  # add bias
+    theta_gt = torch.randn(n_features + 1, 1).double()
+    y_vec = x_arr @ theta_gt
+
+    n_set = int(round(n_samples / 2))
+    x_train, y_train = x_arr[:n_set], y_vec[:n_set]
+    x_test, y_test = x_arr[n_set:], y_vec[n_set:]
+    return x_train, y_train, x_test, y_test, theta_gt
